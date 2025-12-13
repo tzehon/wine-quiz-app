@@ -152,41 +152,8 @@ Designed primarily for mobile use while reading a wine book, with responsive lay
 
 ## Deploying to Vercel
 
-Since this app is in a subfolder of a monorepo, configure Vercel to use the correct root directory:
-
-### Option 1: Vercel Dashboard
-
-1. Go to [vercel.com](https://vercel.com) and import your repository
-2. In the configuration step, set **Root Directory** to `wine-quiz-app`
-3. Vercel auto-detects Vite and configures build settings
-4. Click **Deploy**
-
-### Option 2: Vercel CLI
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# From the wine-quiz-app directory
-cd wine-quiz-app
-vercel
-
-# Or specify root directory from repo root
-vercel --cwd wine-quiz-app
-```
-
-### Option 3: vercel.json (in wine-quiz-app folder)
-
-```json
-{
-  "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist"
-}
-```
-
-Then set root directory to `wine-quiz-app` in Vercel dashboard.
-
-### Environment
+1. Go to [vercel.com](https://vercel.com) and import this repository
+2. Vercel auto-detects Vite and configures build settings
+3. Click **Deploy**
 
 No environment variables required - the app uses static JSON files and localStorage.
