@@ -48,9 +48,15 @@
   --bg-secondary: #242322;
   --bg-card: #2D2B2A;
   --text-primary: #F5F3F0;
-  --text-secondary: #B5B2AF;
-  --text-muted: #757270;
+  --text-secondary: #E0DCDA;
+  --text-muted: #A8A5A2;
   --border: #3A3836;
+}
+
+.dark-mode input::placeholder,
+.dark input::placeholder {
+  color: #A8A5A2;
+  opacity: 1;
 }
 
 /* Reset & Base */
@@ -1320,6 +1326,7 @@ body {
   border: none;
   cursor: pointer;
   text-align: left;
+  color: var(--text-primary);
 }
 
 .style-color-bar {
@@ -1359,6 +1366,7 @@ body {
   margin-bottom: var(--spacing-xs);
   cursor: pointer;
   text-align: left;
+  color: var(--text-primary);
 }
 
 .wine-item.selected {
