@@ -93,6 +93,41 @@
         { "name": "Valpolicella Blend", "origin": "Italy" },
         { "name": "Zinfandel", "origin": "USA/Croatia" }
       ]
+    },
+    {
+      "id": "full-red",
+      "name": "Full-Bodied Red Wine",
+      "color": "#722F37",
+      "description": "Have high tannin, opaque ruby color from high anthocyanin content, and rich fruit flavors. These bold wines can be enjoyed on their own or with equally bold-flavored foods.",
+      "wines": [
+        { "name": "Aglianico", "origin": "Italy" },
+        { "name": "Bordeaux Blend", "origin": "France" },
+        { "name": "Cabernet Sauvignon", "origin": "France" },
+        { "name": "Malbec", "origin": "Argentina" },
+        { "name": "Mourvèdre", "origin": "France/Spain" },
+        { "name": "Nebbiolo", "origin": "Italy" },
+        { "name": "Nero d'Avola", "origin": "Italy" },
+        { "name": "Petit Verdot", "origin": "France" },
+        { "name": "Petite Sirah", "origin": "France/USA" },
+        { "name": "Pinotage", "origin": "South Africa" },
+        { "name": "Syrah", "origin": "France" },
+        { "name": "Tempranillo", "origin": "Spain" },
+        { "name": "Touriga Nacional", "origin": "Portugal" }
+      ]
+    },
+    {
+      "id": "dessert",
+      "name": "Dessert Wine",
+      "color": "#DAA520",
+      "description": "Range in style from off-dry to very sweet. The sweetest with highest acidity can be cellared for many years to develop subtle nutty flavors. Some are fortified with brandy for high alcohol.",
+      "wines": [
+        { "name": "Madeira", "origin": "Portugal" },
+        { "name": "Marsala", "origin": "Italy" },
+        { "name": "Port", "origin": "Portugal" },
+        { "name": "Sauternes", "origin": "France" },
+        { "name": "Sherry", "origin": "Spain" },
+        { "name": "Vin Santo", "origin": "Italy" }
+      ]
     }
   ]
 }

@@ -119,6 +119,8 @@ wine-quiz-app/
 - **Rosé**: Rosé
 - **Light-Bodied Red**: Gamay, Pinot Noir
 - **Medium-Bodied Red**: Barbera, Cabernet Franc, Carignan, Carménère, Grenache, Mencía, Merlot, Montepulciano, Negroamaro, Rhône/GSM Blend, Sangiovese, Valpolicella Blend, Zinfandel
+- **Full-Bodied Red**: Aglianico, Bordeaux Blend, Cabernet Sauvignon, Malbec, Mourvèdre, Nebbiolo, Nero d'Avola, Petit Verdot, Petite Sirah, Pinotage, Syrah, Tempranillo, Touriga Nacional
+- **Dessert**: Madeira, Marsala, Port, Sauternes, Sherry, Vin Santo
 
 ## Updating Wine Data
 

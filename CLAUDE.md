@@ -61,3 +61,9 @@ Single CSS file at `src/styles.css` using CSS custom properties for theming. Dar
 - Offline support: detects connectivity changes, falls back to localStorage cache
 - SM-2 spaced repetition: ease factor starts at 2.5, adjusts ±0.1 based on correctness (min 1.3)
 - Quiz difficulty controls number of wrong options (3/4/5)
+
+## Documentation
+
+After making changes, check if documentation needs updating:
+- `README.md` - Update "Wine Categories Included" section when adding/removing wines or categories
+- `public/data/pronunciations.json` - Add pronunciations for any new wines

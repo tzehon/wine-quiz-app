@@ -37,6 +37,25 @@
     "Marsanne Blend": { "simple": "mar-SAHN Blend" },
     "Rosé": { "simple": "roh-ZAY" },
     "Rhône/GSM Blend": { "simple": "ROHN / GSM Blend" },
-    "Valpolicella Blend": { "simple": "val-poh-lee-CHEL-lah Blend" }
+    "Valpolicella Blend": { "simple": "val-poh-lee-CHEL-lah Blend" },
+    "Aglianico": { "simple": "ah-LYAH-nee-koh" },
+    "Bordeaux Blend": { "simple": "bor-DOH Blend" },
+    "Cabernet Sauvignon": { "simple": "cab-er-NAY saw-veen-YOHN" },
+    "Malbec": { "simple": "MAHL-bek" },
+    "Mourvèdre": { "simple": "moor-VED-ruh" },
+    "Nebbiolo": { "simple": "neb-bee-OH-loh" },
+    "Nero d'Avola": { "simple": "NEH-roh DAH-voh-lah" },
+    "Petit Verdot": { "simple": "peh-TEE vair-DOH" },
+    "Petite Sirah": { "simple": "peh-TEET see-RAH" },
+    "Pinotage": { "simple": "pee-noh-TAHZH" },
+    "Syrah": { "simple": "see-RAH" },
+    "Tempranillo": { "simple": "tem-prah-NEE-yoh" },
+    "Touriga Nacional": { "simple": "too-REE-gah nah-see-oh-NAHL" },
+    "Madeira": { "simple": "mah-DAIR-uh" },
+    "Marsala": { "simple": "mar-SAH-lah" },
+    "Port": { "simple": "PORT" },
+    "Sauternes": { "simple": "saw-TAIRN" },
+    "Sherry": { "simple": "SHEH-ree" },
+    "Vin Santo": { "simple": "veen SAHN-toh" }
   }
 }
