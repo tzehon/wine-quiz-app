@@ -92,6 +92,74 @@ describe('useProgress quiz settings migration', () => {
     expect(result.current.progress).toBe(before)
   })
 
+  it('rejects a future schema import without replacing current progress', () => {
+    const { result } = renderHook(() => useProgress())
+    const before = result.current.progress
+
+    let importResult
+    act(() => {
+      importResult = result.current.importProgress(JSON.stringify({ schemaVersion: 999 }))
+    })
+
+    expect(importResult).toBe(false)
+    expect(result.current.progress).toBe(before)
+  })
+
+  it('does not overwrite progress saved by a future app version on startup', () => {
+    const futureSave = JSON.stringify({
+      schemaVersion: 999,
+      futureOnlyData: { keep: 'untouched' },
+    })
+    localStorage.setItem('wineQuizProgress', futureSave)
+
+    const { result } = renderHook(() => useProgress())
+
+    expect(result.current.progress.schemaVersion).toBe(2)
+    expect(result.current.isReadOnly).toBe(true)
+    expect(localStorage.getItem('wineQuizProgress')).toBe(futureSave)
+
+    act(() => result.current.toggleDarkMode())
+    expect(result.current.progress.settings.darkMode).toBe(false)
+    expect(localStorage.getItem('wineQuizProgress')).toBe(futureSave)
+  })
+
+  it('does not overwrite a future save written after this app mounts', async () => {
+    const { result } = renderHook(() => useProgress())
+    const futureSave = JSON.stringify({ schemaVersion: 999, futureOnlyData: true })
+
+    localStorage.setItem('wineQuizProgress', futureSave)
+    act(() => result.current.toggleDarkMode())
+
+    await waitFor(() => expect(result.current.isReadOnly).toBe(true))
+    expect(localStorage.getItem('wineQuizProgress')).toBe(futureSave)
+  })
+
+  it('switches to read-only when another tab writes future progress', async () => {
+    const { result } = renderHook(() => useProgress())
+    const futureSave = JSON.stringify({ schemaVersion: 999, futureOnlyData: true })
+    localStorage.setItem('wineQuizProgress', futureSave)
+
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'wineQuizProgress',
+        newValue: futureSave,
+      }))
+    })
+
+    await waitFor(() => expect(result.current.isReadOnly).toBe(true))
+    expect(localStorage.getItem('wineQuizProgress')).toBe(futureSave)
+  })
+
+  it('can reset a protected future save into a fresh writable record', async () => {
+    localStorage.setItem('wineQuizProgress', JSON.stringify({ schemaVersion: 999 }))
+    const { result } = renderHook(() => useProgress())
+
+    act(() => result.current.resetProgress())
+
+    await waitFor(() => expect(result.current.isReadOnly).toBe(false))
+    expect(JSON.parse(localStorage.getItem('wineQuizProgress')).schemaVersion).toBe(2)
+  })
+
   it('recovers from corrupt saved and imported JSON', () => {
     localStorage.setItem('wineQuizProgress', '{not-json')
     const { result } = renderHook(() => useProgress())
@@ -152,6 +220,7 @@ describe('useProgress quiz settings migration', () => {
       currentStreak: 0,
       longestStreak: 0,
       lastQuizDate: null,
+      activityDates: [],
     })
     expect(result.current.progress.settings).toEqual(expect.objectContaining({
       difficulty: 'medium',
@@ -169,24 +238,78 @@ describe('useProgress quiz settings migration', () => {
     const { result } = renderHook(() => useProgress())
 
     act(() => {
-      result.current.recordWineAnswer('Riesling', true)
-      result.current.recordWineAnswer('Riesling', false)
-      result.current.recordCategoryAnswer('aromatic-white', true)
-      result.current.recordCategoryAnswer('aromatic-white', false)
-      result.current.incrementQuestions()
+      result.current.recordQuizAnswer({
+        mode: 'category-match',
+        isCorrect: true,
+        answeredAt: '2026-08-14T00:00:00Z',
+        wineResults: [{ wineName: 'Riesling', isCorrect: true }],
+        categoryResults: [{ categoryId: 'aromatic-white', isCorrect: true }],
+      })
+      result.current.recordQuizAnswer({
+        mode: 'category-match',
+        isCorrect: false,
+        answeredAt: '2026-08-14T00:01:00Z',
+        wineResults: [{ wineName: 'Riesling', isCorrect: false }],
+        categoryResults: [{ categoryId: 'aromatic-white', isCorrect: false }],
+      })
     })
 
     expect(result.current.progress.wineProgress.Riesling).toEqual(expect.objectContaining({
       timesCorrect: 1,
       timesIncorrect: 1,
       lastSeen: expect.any(String),
-      easeFactor: 2.5,
+      easeFactor: 2.3,
     }))
     expect(result.current.progress.categoryProgress['aromatic-white']).toEqual({
       timesCorrect: 1,
       timesIncorrect: 1,
     })
-    expect(result.current.progress.stats.totalQuestions).toBe(1)
+    expect(result.current.progress.stats.totalQuestions).toBe(2)
+    expect(result.current.progress.stats.trackedAccuracy).toEqual({
+      correct: 1,
+      answered: 2,
+      startedAt: '2026-08-14T00:00:00.000Z',
+    })
+  })
+
+  it('persists an atomic review answer and schedule across a reload', async () => {
+    const firstRender = renderHook(() => useProgress())
+
+    act(() => {
+      firstRender.result.current.recordQuizAnswer({
+        mode: 'category-match',
+        isCorrect: true,
+        answeredAt: '2026-08-14T00:00:00Z',
+        wineResults: [{ wineName: 'Cava', isCorrect: true }],
+        categoryResults: [{ categoryId: 'sparkling', isCorrect: true }],
+      })
+    })
+
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem('wineQuizProgress')).wineProgress.Cava.nextReview)
+        .toBe('2026-08-15T00:00:00.000Z')
+    })
+    firstRender.unmount()
+
+    const reloaded = renderHook(() => useProgress())
+    expect(reloaded.result.current.progress.wineProgress.Cava).toEqual(expect.objectContaining({
+      timesCorrect: 1,
+      repetitions: 1,
+      interval: 1,
+      nextReview: '2026-08-15T00:00:00.000Z',
+    }))
+    expect(reloaded.result.current.progress.stats.trackedAccuracy).toEqual({
+      correct: 1,
+      answered: 1,
+      startedAt: '2026-08-14T00:00:00.000Z',
+    })
+    expect(reloaded.result.current.progress.stats.byMode).toEqual({
+      'category-match': { correct: 1, answered: 1 },
+    })
+    expect(reloaded.result.current.progress.categoryProgress.sparkling).toEqual({
+      timesCorrect: 1,
+      timesIncorrect: 0,
+    })
   })
 
   it('tracks same-day, consecutive, and broken quiz streaks', () => {
@@ -194,26 +317,75 @@ describe('useProgress quiz settings migration', () => {
     vi.setSystemTime(new Date('2026-08-10T08:00:00Z'))
     const { result } = renderHook(() => useProgress())
 
-    act(() => result.current.updateStreak())
-    act(() => result.current.updateStreak())
+    act(() => result.current.completeQuiz({ sessionId: 'one', completedAt: new Date() }))
+    act(() => result.current.completeQuiz({ sessionId: 'two', completedAt: new Date() }))
     expect(result.current.progress.streakData).toEqual({
       currentStreak: 1,
       longestStreak: 1,
       lastQuizDate: '2026-08-10',
+      activityDates: ['2026-08-10'],
     })
 
     vi.setSystemTime(new Date('2026-08-11T08:00:00Z'))
-    act(() => result.current.updateStreak())
+    act(() => result.current.completeQuiz({ sessionId: 'three', completedAt: new Date() }))
     expect(result.current.progress.streakData.currentStreak).toBe(2)
 
     vi.setSystemTime(new Date('2026-08-14T08:00:00Z'))
-    act(() => result.current.updateStreak())
+    act(() => result.current.completeQuiz({ sessionId: 'four', completedAt: new Date() }))
     expect(result.current.progress.streakData).toEqual(expect.objectContaining({
       currentStreak: 1,
       longestStreak: 2,
       lastQuizDate: '2026-08-14',
     }))
     expect(result.current.progress.stats.totalQuizzes).toBe(4)
+  })
+
+  it('does not count the same completed session twice', () => {
+    const { result } = renderHook(() => useProgress())
+
+    act(() => {
+      result.current.completeQuiz({
+        sessionId: 'stable-session',
+        kind: 'review',
+        completedAt: '2026-08-14T08:00:00Z',
+      })
+      result.current.completeQuiz({
+        sessionId: 'stable-session',
+        kind: 'review',
+        completedAt: '2026-08-14T08:00:00Z',
+      })
+    })
+
+    expect(result.current.progress.stats.totalQuizzes).toBe(1)
+    expect(result.current.progress.stats.completedSessionIds).toEqual(['stable-session'])
+  })
+
+  it('keeps a completed session idempotent after reload', async () => {
+    const firstRender = renderHook(() => useProgress())
+    act(() => {
+      firstRender.result.current.completeQuiz({
+        sessionId: 'persisted-session',
+        kind: 'review',
+        completedAt: '2026-08-14T08:00:00Z',
+      })
+    })
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem('wineQuizProgress')).stats.totalQuizzes).toBe(1)
+    })
+    firstRender.unmount()
+
+    const reloaded = renderHook(() => useProgress())
+    act(() => {
+      reloaded.result.current.completeQuiz({
+        sessionId: 'persisted-session',
+        kind: 'review',
+        completedAt: '2026-08-14T08:00:00Z',
+      })
+    })
+
+    expect(reloaded.result.current.progress.stats.totalQuizzes).toBe(1)
+    expect(reloaded.result.current.progress.stats.completedSessionIds).toEqual(['persisted-session'])
+    expect(reloaded.result.current.progress.streakData.activityDates).toEqual(['2026-08-14'])
   })
 
   it('toggles appearance, marks study state, and resets fresh defaults', () => {

@@ -1,334 +1,312 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  DEFAULT_QUIZ_MODE_IDS,
-  QUIZ_DIFFICULTIES,
-  QUIZ_MODE_IDS,
-  QUIZ_QUESTION_COUNTS
-} from '../quiz/quizModes';
+  createDefaultProgress,
+  isFutureProgressSchema,
+  normalizeProgressSettings,
+  normalizeSavedProgress,
+  parseProgressImport
+} from '../utils/progressSchema';
+import { updateWineSchedule } from '../utils/spacedRepetition';
 
 const PROGRESS_KEY = 'wineQuizProgress';
 
-const createDefaultSettings = () => ({
-  enabledModes: [...DEFAULT_QUIZ_MODE_IDS],
-  focusCategories: [],
-  difficulty: 'medium',
-  questionsPerSession: 10,
-  darkMode: false
-});
-
-const createDefaultProgress = () => ({
-  wineProgress: {},
-  categoryProgress: {},
-  streakData: {
-    currentStreak: 0,
-    longestStreak: 0,
-    lastQuizDate: null
-  },
-  settings: createDefaultSettings(),
-  stats: {
-    totalQuizzes: 0,
-    totalQuestions: 0
-  }
-});
-
-const validQuizModeIds = new Set(QUIZ_MODE_IDS);
-const validDifficulties = new Set(QUIZ_DIFFICULTIES);
-const validQuestionCounts = new Set(QUIZ_QUESTION_COUNTS);
-
-function isRecord(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+function safeDate(value, fallback = new Date()) {
+  const date = value ? new Date(value) : fallback;
+  return Number.isNaN(date.getTime()) ? fallback : date;
 }
 
-function normalizeCounter(value) {
-  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+export function getLocalDateKey(value = new Date()) {
+  const date = safeDate(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-function normalizeNullableString(value) {
-  return typeof value === 'string' ? value : null;
-}
-
-function normalizeEnabledModes(enabledModes) {
-  if (!Array.isArray(enabledModes)) {
-    return [...DEFAULT_QUIZ_MODE_IDS];
-  }
-
-  const normalized = [...new Set(enabledModes.filter(modeId => validQuizModeIds.has(modeId)))];
-  return normalized.length > 0 ? normalized : [...DEFAULT_QUIZ_MODE_IDS];
-}
-
-function normalizeSettings(settings) {
-  const defaults = createDefaultSettings();
-  const value = isRecord(settings) ? settings : {};
-
-  return {
-    ...defaults,
-    ...value,
-    enabledModes: normalizeEnabledModes(value.enabledModes),
-    focusCategories: Array.isArray(value.focusCategories)
-      ? [...new Set(value.focusCategories.filter(categoryId => typeof categoryId === 'string'))]
-      : defaults.focusCategories,
-    difficulty: validDifficulties.has(value.difficulty)
-      ? value.difficulty
-      : defaults.difficulty,
-    questionsPerSession: validQuestionCounts.has(value.questionsPerSession)
-      ? value.questionsPerSession
-      : defaults.questionsPerSession,
-    darkMode: typeof value.darkMode === 'boolean' ? value.darkMode : defaults.darkMode
+function dateKeyDifference(laterKey, earlierKey) {
+  const toUtc = (dateKey) => {
+    const [year, month, day] = dateKey.split('-').map(Number);
+    return Date.UTC(year, month - 1, day);
   };
+  return Math.round((toUtc(laterKey) - toUtc(earlierKey)) / 86_400_000);
 }
 
-function normalizeWineProgress(wineProgress) {
-  if (!isRecord(wineProgress)) return {};
+function normalizeAnswerResults(results, identityKey) {
+  if (!Array.isArray(results)) return [];
 
-  return Object.fromEntries(
-    Object.entries(wineProgress)
-      .filter(([, value]) => isRecord(value))
-      .map(([wineName, value]) => [wineName, {
-        ...value,
-        timesCorrect: normalizeCounter(value.timesCorrect),
-        timesIncorrect: normalizeCounter(value.timesIncorrect),
-        lastSeen: normalizeNullableString(value.lastSeen),
-        nextReview: normalizeNullableString(value.nextReview),
-        easeFactor: Number.isFinite(value.easeFactor) && value.easeFactor > 0
-          ? value.easeFactor
-          : 2.5
-      }])
-  );
-}
-
-function normalizeCategoryProgress(categoryProgress) {
-  if (!isRecord(categoryProgress)) return {};
-
-  return Object.fromEntries(
-    Object.entries(categoryProgress)
-      .filter(([, value]) => isRecord(value))
-      .map(([categoryId, value]) => [categoryId, {
-        ...value,
-        timesCorrect: normalizeCounter(value.timesCorrect),
-        timesIncorrect: normalizeCounter(value.timesIncorrect)
-      }])
-  );
-}
-
-function normalizeSavedProgress(savedProgress) {
-  const defaults = createDefaultProgress();
-  if (!savedProgress || typeof savedProgress !== 'object' || Array.isArray(savedProgress)) {
-    return defaults;
-  }
-
-  const savedStreak = isRecord(savedProgress.streakData) ? savedProgress.streakData : {};
-  const savedStats = isRecord(savedProgress.stats) ? savedProgress.stats : {};
-
-  return {
-    ...defaults,
-    ...savedProgress,
-    wineProgress: normalizeWineProgress(savedProgress.wineProgress),
-    categoryProgress: normalizeCategoryProgress(savedProgress.categoryProgress),
-    streakData: {
-      ...defaults.streakData,
-      ...savedStreak,
-      currentStreak: normalizeCounter(savedStreak.currentStreak),
-      longestStreak: normalizeCounter(savedStreak.longestStreak),
-      lastQuizDate: normalizeNullableString(savedStreak.lastQuizDate)
-    },
-    settings: normalizeSettings(savedProgress.settings),
-    stats: {
-      ...defaults.stats,
-      ...savedStats,
-      totalQuizzes: normalizeCounter(savedStats.totalQuizzes),
-      totalQuestions: normalizeCounter(savedStats.totalQuestions)
+  const byIdentity = new Map();
+  results.forEach(result => {
+    const identity = result?.[identityKey];
+    if (typeof identity === 'string' && identity.length > 0) {
+      byIdentity.set(identity, {
+        [identityKey]: identity,
+        isCorrect: Boolean(result.isCorrect)
+      });
     }
-  };
+  });
+  return [...byIdentity.values()];
+}
+
+function loadSavedProgress() {
+  const saved = localStorage.getItem(PROGRESS_KEY);
+  if (!saved) {
+    return { progress: createDefaultProgress(), preserveStoredProgress: false };
+  }
+
+  try {
+    const parsed = JSON.parse(saved);
+    if (isFutureProgressSchema(parsed)) {
+      return { progress: createDefaultProgress(), preserveStoredProgress: true };
+    }
+    return { progress: normalizeSavedProgress(parsed), preserveStoredProgress: false };
+  } catch {
+    return { progress: createDefaultProgress(), preserveStoredProgress: false };
+  }
+}
+
+function storageContainsFutureProgress() {
+  const stored = localStorage.getItem(PROGRESS_KEY);
+  if (!stored) return false;
+
+  try {
+    return isFutureProgressSchema(JSON.parse(stored));
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Hook for managing user progress in localStorage
+ * Manage the versioned local progress record and keep each learning event
+ * atomic so counters, schedules, and accuracy cannot drift apart.
  */
 export function useProgress() {
-  const [progress, setProgress] = useState(() => {
-    const saved = localStorage.getItem(PROGRESS_KEY);
-    if (saved) {
-      try {
-        return normalizeSavedProgress(JSON.parse(saved));
-      } catch {
-        return createDefaultProgress();
-      }
-    }
-    return createDefaultProgress();
-  });
+  const [loadedProgress] = useState(loadSavedProgress);
+  const [progress, setProgress] = useState(loadedProgress.progress);
+  const [isReadOnly, setIsReadOnly] = useState(loadedProgress.preserveStoredProgress);
 
-  // Save to localStorage whenever progress changes
   useEffect(() => {
+    if (isReadOnly) return;
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
-  }, [progress]);
+  }, [isReadOnly, progress]);
 
-  // Update wine progress after answer
-  const recordWineAnswer = useCallback((wineName, isCorrect) => {
-    setProgress(prev => {
-      const wineData = prev.wineProgress[wineName] || {
-        timesCorrect: 0,
-        timesIncorrect: 0,
-        lastSeen: null,
-        nextReview: null,
-        easeFactor: 2.5
-      };
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key !== PROGRESS_KEY || !event.newValue) return;
 
-      const now = new Date().toISOString();
-
-      return {
-        ...prev,
-        wineProgress: {
-          ...prev.wineProgress,
-          [wineName]: {
-            ...wineData,
-            timesCorrect: wineData.timesCorrect + (isCorrect ? 1 : 0),
-            timesIncorrect: wineData.timesIncorrect + (isCorrect ? 0 : 1),
-            lastSeen: now
-          }
+      try {
+        if (isFutureProgressSchema(JSON.parse(event.newValue))) {
+          setIsReadOnly(true);
         }
-      };
-    });
+      } catch {
+        // Ignore malformed writes from another tab and preserve current state.
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Update category progress after answer
-  const recordCategoryAnswer = useCallback((categoryId, isCorrect) => {
-    setProgress(prev => {
-      const categoryData = prev.categoryProgress[categoryId] || {
-        timesCorrect: 0,
-        timesIncorrect: 0
-      };
+  const recordQuizAnswer = useCallback(({
+    mode,
+    isCorrect,
+    answeredAt,
+    wineResults,
+    categoryResults
+  } = {}) => {
+    if (isReadOnly || storageContainsFutureProgress()) {
+      setIsReadOnly(true);
+      return;
+    }
+    const answeredDate = safeDate(answeredAt);
+    const answeredIso = answeredDate.toISOString();
+    const normalizedWineResults = normalizeAnswerResults(wineResults, 'wineName');
+    const normalizedCategoryResults = normalizeAnswerResults(categoryResults, 'categoryId');
+    const questionCorrect = Boolean(isCorrect);
 
-      return {
-        ...prev,
-        categoryProgress: {
-          ...prev.categoryProgress,
-          [categoryId]: {
-            timesCorrect: categoryData.timesCorrect + (isCorrect ? 1 : 0),
-            timesIncorrect: categoryData.timesIncorrect + (isCorrect ? 0 : 1)
-          }
-        }
-      };
-    });
-  }, []);
+    setProgress(previous => {
+      if (isReadOnly) return previous;
+      const nextWineProgress = { ...previous.wineProgress };
+      normalizedWineResults.forEach(result => {
+        nextWineProgress[result.wineName] = updateWineSchedule(
+          previous.wineProgress[result.wineName],
+          result.isCorrect,
+          answeredDate
+        );
+      });
 
-  // Update streak after completing a quiz
-  const updateStreak = useCallback(() => {
-    setProgress(prev => {
-      const today = new Date().toISOString().split('T')[0];
-      const lastDate = prev.streakData.lastQuizDate;
+      const nextCategoryProgress = { ...previous.categoryProgress };
+      normalizedCategoryResults.forEach(result => {
+        const current = previous.categoryProgress[result.categoryId] || {
+          timesCorrect: 0,
+          timesIncorrect: 0
+        };
+        nextCategoryProgress[result.categoryId] = {
+          ...current,
+          timesCorrect: current.timesCorrect + (result.isCorrect ? 1 : 0),
+          timesIncorrect: current.timesIncorrect + (result.isCorrect ? 0 : 1)
+        };
+      });
 
-      let newStreak = prev.streakData.currentStreak;
-
-      if (!lastDate) {
-        newStreak = 1;
-      } else {
-        const lastDateObj = new Date(lastDate);
-        const todayObj = new Date(today);
-        const diffDays = Math.floor((todayObj - lastDateObj) / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 0) {
-          // Same day, keep streak
-        } else if (diffDays === 1) {
-          // Consecutive day, increment streak
-          newStreak = prev.streakData.currentStreak + 1;
-        } else {
-          // Streak broken, reset
-          newStreak = 1;
-        }
+      const trackedAccuracy = previous.stats.trackedAccuracy;
+      const byMode = { ...previous.stats.byMode };
+      if (typeof mode === 'string' && mode.length > 0) {
+        const currentMode = byMode[mode] || { correct: 0, answered: 0 };
+        byMode[mode] = {
+          correct: currentMode.correct + (questionCorrect ? 1 : 0),
+          answered: currentMode.answered + 1
+        };
       }
 
       return {
-        ...prev,
+        ...previous,
+        wineProgress: nextWineProgress,
+        categoryProgress: nextCategoryProgress,
+        stats: {
+          ...previous.stats,
+          totalQuestions: previous.stats.totalQuestions + 1,
+          trackedAccuracy: {
+            correct: trackedAccuracy.correct + (questionCorrect ? 1 : 0),
+            answered: trackedAccuracy.answered + 1,
+            startedAt: trackedAccuracy.startedAt || answeredIso
+          },
+          byMode
+        }
+      };
+    });
+  }, [isReadOnly]);
+
+  const completeQuiz = useCallback(({
+    sessionId,
+    completedAt,
+    kind = 'practice'
+  } = {}) => {
+    if (isReadOnly || storageContainsFutureProgress()) {
+      setIsReadOnly(true);
+      return;
+    }
+    const completedDate = safeDate(completedAt);
+    const dateKey = getLocalDateKey(completedDate);
+
+    setProgress(previous => {
+      if (isReadOnly) return previous;
+      const completedSessionIds = previous.stats.completedSessionIds;
+      if (sessionId && completedSessionIds.includes(sessionId)) {
+        return previous;
+      }
+
+      const lastDate = previous.streakData.lastQuizDate;
+      const difference = lastDate ? dateKeyDifference(dateKey, lastDate) : null;
+      let currentStreak = previous.streakData.currentStreak;
+      if (!lastDate || difference > 1 || difference < 0) {
+        currentStreak = 1;
+      } else if (difference === 1) {
+        currentStreak += 1;
+      }
+
+      const activityDates = [...new Set([
+        ...previous.streakData.activityDates,
+        dateKey
+      ])].sort();
+
+      return {
+        ...previous,
         streakData: {
-          currentStreak: newStreak,
-          longestStreak: Math.max(newStreak, prev.streakData.longestStreak),
-          lastQuizDate: today
+          ...previous.streakData,
+          currentStreak,
+          longestStreak: Math.max(currentStreak, previous.streakData.longestStreak),
+          lastQuizDate: dateKey,
+          activityDates
         },
         stats: {
-          ...prev.stats,
-          totalQuizzes: prev.stats.totalQuizzes + 1
+          ...previous.stats,
+          totalQuizzes: previous.stats.totalQuizzes + 1,
+          lastSessionKind: kind,
+          completedSessionIds: sessionId
+            ? [...completedSessionIds, sessionId].slice(-100)
+            : completedSessionIds
         }
       };
     });
-  }, []);
+  }, [isReadOnly]);
 
-  // Increment total questions
-  const incrementQuestions = useCallback(() => {
-    setProgress(prev => ({
-      ...prev,
-      stats: {
-        ...prev.stats,
-        totalQuestions: prev.stats.totalQuestions + 1
-      }
-    }));
-  }, []);
-
-  // Update settings
   const updateSettings = useCallback((newSettings) => {
-    setProgress(prev => ({
-      ...prev,
-      settings: normalizeSettings({ ...prev.settings, ...newSettings })
+    if (isReadOnly || storageContainsFutureProgress()) {
+      setIsReadOnly(true);
+      return;
+    }
+    setProgress(previous => ({
+      ...previous,
+      settings: normalizeProgressSettings({
+        ...previous.settings,
+        ...newSettings
+      })
     }));
-  }, []);
+  }, [isReadOnly]);
 
-  // Toggle dark mode
   const toggleDarkMode = useCallback(() => {
-    setProgress(prev => ({
-      ...prev,
+    if (isReadOnly || storageContainsFutureProgress()) {
+      setIsReadOnly(true);
+      return;
+    }
+    setProgress(previous => ({
+      ...previous,
       settings: {
-        ...prev.settings,
-        darkMode: !prev.settings.darkMode
+        ...previous.settings,
+        darkMode: !previous.settings.darkMode
       }
     }));
-  }, []);
+  }, [isReadOnly]);
 
-  // Reset all progress
   const resetProgress = useCallback(() => {
-    setProgress(createDefaultProgress());
     localStorage.removeItem(PROGRESS_KEY);
+    setProgress(createDefaultProgress());
+    setIsReadOnly(false);
   }, []);
 
-  // Export progress as JSON
   const exportProgress = useCallback(() => {
-    const dataStr = JSON.stringify(progress, null, 2);
+    const preservedProgress = isReadOnly
+      ? localStorage.getItem(PROGRESS_KEY)
+      : null;
+    const dataStr = preservedProgress || JSON.stringify(progress, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `wine-quiz-progress-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `wine-quiz-progress-${getLocalDateKey()}.json`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [progress]);
+  }, [isReadOnly, progress]);
 
-  // Import progress from JSON
   const importProgress = useCallback((jsonData) => {
-    try {
-      const imported = JSON.parse(jsonData);
-      if (!imported || typeof imported !== 'object' || Array.isArray(imported)) {
-        return false;
-      }
-      setProgress(normalizeSavedProgress(imported));
-      return true;
-    } catch {
-      return false;
-    }
+    const imported = parseProgressImport(jsonData);
+    if (!imported) return false;
+    localStorage.removeItem(PROGRESS_KEY);
+    setProgress(imported);
+    setIsReadOnly(false);
+    return true;
   }, []);
 
-  // Mark wine as known/need to study in study mode
   const markWineStudyStatus = useCallback((wineName, status) => {
-    setProgress(prev => {
-      const wineData = prev.wineProgress[wineName] || {
+    if (isReadOnly || storageContainsFutureProgress()) {
+      setIsReadOnly(true);
+      return;
+    }
+    setProgress(previous => {
+      const wineData = previous.wineProgress[wineName] || {
         timesCorrect: 0,
         timesIncorrect: 0,
         lastSeen: null,
         nextReview: null,
-        easeFactor: 2.5
+        easeFactor: 2.5,
+        interval: 0,
+        repetitions: 0,
+        lapses: 0
       };
 
       return {
-        ...prev,
+        ...previous,
         wineProgress: {
-          ...prev.wineProgress,
+          ...previous.wineProgress,
           [wineName]: {
             ...wineData,
             studyStatus: status
@@ -336,14 +314,13 @@ export function useProgress() {
         }
       };
     });
-  }, []);
+  }, [isReadOnly]);
 
   return {
     progress,
-    recordWineAnswer,
-    recordCategoryAnswer,
-    updateStreak,
-    incrementQuestions,
+    isReadOnly,
+    recordQuizAnswer,
+    completeQuiz,
     updateSettings,
     toggleDarkMode,
     resetProgress,

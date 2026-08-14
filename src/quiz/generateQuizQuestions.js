@@ -90,8 +90,8 @@ function firstSentence(value) {
 }
 
 function generateCategoryMatchQuestion(context) {
-  const { selectedWines, catalogStyles, optionCount, rng } = context;
-  const wine = randomItem(selectedWines, rng);
+  const { selectedWines, catalogStyles, optionCount, rng, targetWine } = context;
+  const wine = targetWine || randomItem(selectedWines, rng);
   const correctStyle = catalogStyles.find(style => style.id === wine.styleId);
   const incorrectStyles = randomItems(
     catalogStyles.filter(style => style.id !== wine.styleId),
@@ -365,4 +365,62 @@ export function generateQuizQuestions({
       id: `quiz-question-${String(index + 1).padStart(3, '0')}-${mode}`
     };
   });
+}
+
+/**
+ * Generate one exact Category Match question for each due wine still present
+ * in the catalog. Targets never change; only answer ordering is randomized.
+ */
+export function generateReviewQuestions({
+  wineNames,
+  wineData,
+  difficulty = 'medium',
+  rng = Math.random
+} = {}) {
+  if (!Array.isArray(wineNames) || wineNames.length === 0) {
+    throw new QuizConfigurationError(['Select at least one wine to review.']);
+  }
+  if (wineNames.some(wineName => typeof wineName !== 'string' || wineName.length === 0)) {
+    throw new QuizConfigurationError(['Review wine names must be non-empty strings.']);
+  }
+  if (new Set(wineNames).size !== wineNames.length) {
+    throw new QuizConfigurationError(['Review wine names must not contain duplicates.']);
+  }
+  if (!wineData || !Array.isArray(wineData.styles) || wineData.styles.length < 2) {
+    throw new QuizConfigurationError(['Review sessions require at least two catalog categories.']);
+  }
+  if (wineData.styles.some(style => !style || typeof style.id !== 'string' || !Array.isArray(style.wines))) {
+    throw new QuizConfigurationError(['Review sessions require valid wine categories.']);
+  }
+  if (typeof rng !== 'function') {
+    throw new TypeError('Quiz RNG must be a function.');
+  }
+
+  const catalogStyles = wineData.styles.filter(style => style.wines.length > 0);
+  if (catalogStyles.length < 2) {
+    throw new QuizConfigurationError([
+      'Review sessions require at least two catalog categories with wines.'
+    ]);
+  }
+  const catalogWines = flattenWines(catalogStyles);
+  const winesByName = new Map(catalogWines.map(wine => [wine.name, wine]));
+  const targetWines = wineNames.map(wineName => winesByName.get(wineName)).filter(Boolean);
+
+  if (targetWines.length === 0) {
+    throw new QuizConfigurationError([
+      'None of the selected review wines remain in the current catalog.'
+    ]);
+  }
+
+  const context = {
+    selectedWines: targetWines,
+    catalogStyles,
+    optionCount: getOptionCount(difficulty),
+    rng
+  };
+
+  return targetWines.map((targetWine, index) => ({
+    ...generateCategoryMatchQuestion({ ...context, targetWine }),
+    id: `review-question-${String(index + 1).padStart(3, '0')}-category-match`
+  }));
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import wineData from '../../public/data/wines.json'
 import {
   generateQuizQuestions,
+  generateReviewQuestions,
   getOptionCount,
   getQuizConfigurationErrors,
   QuizConfigurationError,
@@ -192,5 +193,68 @@ describe('generateQuizQuestions', () => {
       .toThrow('Question count must be a positive integer no greater than 100.')
     expect(() => generateQuizQuestions({ ...validConfig, questionCount: 1, rng: () => 1 }))
       .toThrow(RangeError)
+  })
+})
+
+describe('generateReviewQuestions', () => {
+  it('targets each requested catalog wine exactly once in order', () => {
+    const questions = generateReviewQuestions({
+      wineNames: ['Riesling', 'Cava', 'Merlot'],
+      wineData,
+      difficulty: 'hard',
+      rng: createSeededRng(22),
+    })
+
+    expect(questions.map(question => question.wine.name))
+      .toEqual(['Riesling', 'Cava', 'Merlot'])
+    expect(questions.every(question => question.mode === 'category-match')).toBe(true)
+    expect(new Set(questions.map(question => question.id)).size).toBe(3)
+    expect(questions.every(question => question.options.length === 5)).toBe(true)
+    for (const question of questions) {
+      expect(question.options.filter(option => option.isCorrect)).toHaveLength(1)
+      expect(question.options.find(option => option.isCorrect)?.id).toBe(question.wine.styleId)
+    }
+  })
+
+  it('skips catalog orphans while retaining valid review targets', () => {
+    expect(generateReviewQuestions({
+      wineNames: ['No Longer Listed', 'Cava'],
+      wineData,
+      rng: createSeededRng(1),
+    }).map(question => question.wine.name)).toEqual(['Cava'])
+  })
+
+  it('reports empty, duplicate, invalid, and fully orphaned review requests', () => {
+    expect(() => generateReviewQuestions({ wineNames: [], wineData }))
+      .toThrow('Select at least one wine to review.')
+    expect(() => generateReviewQuestions({ wineNames: ['Cava', 'Cava'], wineData }))
+      .toThrow('Review wine names must not contain duplicates.')
+    expect(() => generateReviewQuestions({ wineNames: [42], wineData }))
+      .toThrow('Review wine names must be non-empty strings.')
+    expect(() => generateReviewQuestions({ wineNames: ['No Longer Listed'], wineData }))
+      .toThrow('None of the selected review wines remain in the current catalog.')
+  })
+
+  it('rejects ineffective catalogs and invalid random sources', () => {
+    const oneEffectiveStyle = {
+      styles: [
+        { id: 'only', name: 'Only', wines: [{ name: 'Solo' }] },
+        { id: 'empty', name: 'Empty', wines: [] },
+      ],
+    }
+
+    expect(() => generateReviewQuestions({
+      wineNames: ['Solo'],
+      wineData: oneEffectiveStyle,
+    })).toThrow('Review sessions require at least two catalog categories with wines.')
+    expect(() => generateReviewQuestions({
+      wineNames: ['Cava'],
+      wineData: { styles: [{ id: 'broken', wines: null }, { id: 'other', wines: [] }] },
+    })).toThrow('Review sessions require valid wine categories.')
+    expect(() => generateReviewQuestions({
+      wineNames: ['Cava'],
+      wineData,
+      rng: 'not-a-function',
+    })).toThrow('Quiz RNG must be a function.')
   })
 })
