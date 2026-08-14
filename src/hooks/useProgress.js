@@ -86,7 +86,17 @@ export function useProgress() {
 
   useEffect(() => {
     if (isReadOnly) return;
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+
+    const persistProgress = () => {
+      if (storageContainsFutureProgress()) {
+        setIsReadOnly(true);
+        return;
+      }
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    };
+
+    const timeoutId = window.setTimeout(persistProgress, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [isReadOnly, progress]);
 
   useEffect(() => {

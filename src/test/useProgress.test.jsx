@@ -134,6 +134,19 @@ describe('useProgress quiz settings migration', () => {
     expect(localStorage.getItem('wineQuizProgress')).toBe(futureSave)
   })
 
+  it('rechecks storage at persistence time before writing queued state', async () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useProgress())
+    const futureSave = JSON.stringify({ schemaVersion: 999, writtenDuringRace: true })
+
+    act(() => result.current.toggleDarkMode())
+    localStorage.setItem('wineQuizProgress', futureSave)
+    await act(async () => vi.runOnlyPendingTimersAsync())
+
+    expect(result.current.isReadOnly).toBe(true)
+    expect(localStorage.getItem('wineQuizProgress')).toBe(futureSave)
+  })
+
   it('switches to read-only when another tab writes future progress', async () => {
     const { result } = renderHook(() => useProgress())
     const futureSave = JSON.stringify({ schemaVersion: 999, futureOnlyData: true })
