@@ -311,6 +311,10 @@ export function generateQuizQuestions({
   difficulty = 'medium',
   rng = Math.random
 } = {}) {
+  if (questionCount === undefined) {
+    throw new QuizConfigurationError(['Question count is required.']);
+  }
+
   const configurationErrors = getQuizConfigurationErrors({
     selectedModes,
     selectedCategories,
