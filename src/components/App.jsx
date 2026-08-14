@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Navigation } from './Navigation';
 import { Home } from './Home';
 import { QuizModeSelector } from './QuizModeSelector';
@@ -9,6 +9,14 @@ import { ProgressDashboard } from './ProgressDashboard';
 import { Settings } from './Settings';
 import { useWineData } from '../hooks/useWineData';
 import { useProgress } from '../hooks/useProgress';
+import { selectDueWines } from '../utils/spacedRepetition';
+
+function createSessionId() {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `quiz-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export function App() {
   const [currentView, setCurrentView] = useState('home');
@@ -16,7 +24,10 @@ export function App() {
   const [quizConfig, setQuizConfig] = useState({
     selectedModes: [],
     selectedCategories: [],
-    questionCount: 10
+    questionCount: 10,
+    sessionKind: 'practice',
+    sessionId: null,
+    targetWineNames: []
   });
   const [quizResults, setQuizResults] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -28,15 +39,15 @@ export function App() {
     error,
     lastUpdated,
     refresh,
-    getAllStyles
+    getAllStyles,
+    getAllWines
   } = useWineData();
 
   const {
     progress,
-    recordWineAnswer,
-    recordCategoryAnswer,
-    updateStreak,
-    incrementQuestions,
+    isReadOnly,
+    recordQuizAnswer,
+    completeQuiz,
     updateSettings,
     toggleDarkMode,
     resetProgress,
@@ -44,6 +55,7 @@ export function App() {
     importProgress,
     markWineStudyStatus
   } = useProgress();
+  const allWines = useMemo(() => getAllWines(), [getAllWines]);
 
   // Monitor online status
   useEffect(() => {
@@ -68,7 +80,10 @@ export function App() {
     setQuizConfig({
       selectedModes: [...progress.settings.enabledModes],
       selectedCategories: getAllStyles().map(style => style.id),
-      questionCount: progress.settings.questionsPerSession
+      questionCount: progress.settings.questionsPerSession,
+      sessionKind: 'practice',
+      sessionId: null,
+      targetWineNames: []
     });
     setCurrentView('quiz');
     setQuizState('configuring');
@@ -85,24 +100,54 @@ export function App() {
   }, [openQuizConfigurator]);
 
   const handleBeginQuiz = useCallback(() => {
+    setQuizConfig(previous => ({
+      ...previous,
+      sessionKind: 'practice',
+      sessionId: createSessionId(),
+      targetWineNames: []
+    }));
     setQuizState('playing');
   }, []);
 
-  const handleQuizAnswer = useCallback((identifier, isCorrect, details) => {
-    if (details.wineName) {
-      recordWineAnswer(details.wineName, isCorrect);
-    }
-    if (details.categoryId) {
-      recordCategoryAnswer(details.categoryId, isCorrect);
-    }
-    incrementQuestions();
-  }, [recordWineAnswer, recordCategoryAnswer, incrementQuestions]);
+  const handleQuizAnswer = useCallback((outcome) => {
+    recordQuizAnswer(outcome);
+  }, [recordQuizAnswer]);
 
   const handleQuizComplete = useCallback((results) => {
     setQuizResults(results);
     setQuizState('results');
-    updateStreak();
-  }, [updateStreak]);
+    completeQuiz({
+      sessionId: results.sessionId,
+      kind: results.sessionKind,
+      score: results.score,
+      total: results.total,
+      completedAt: new Date().toISOString()
+    });
+  }, [completeQuiz]);
+
+  const handleStartReview = useCallback(() => {
+    const dueWineNames = selectDueWines(
+      progress.wineProgress,
+      allWines,
+      new Date()
+    )
+      .map(wine => typeof wine === 'string' ? wine : wine.name)
+      .slice(0, progress.settings.questionsPerSession);
+
+    if (dueWineNames.length === 0) return;
+
+    setQuizConfig({
+      selectedModes: ['category-match'],
+      selectedCategories: [],
+      questionCount: dueWineNames.length,
+      sessionKind: 'review',
+      sessionId: createSessionId(),
+      targetWineNames: dueWineNames
+    });
+    setQuizResults(null);
+    setCurrentView('quiz');
+    setQuizState('playing');
+  }, [allWines, progress.settings.questionsPerSession, progress.wineProgress]);
 
   const handleExitQuiz = useCallback(() => {
     setQuizState('idle');
@@ -110,7 +155,22 @@ export function App() {
   }, []);
 
   const handlePlayAgain = useCallback(() => {
-    setQuizState('configuring');
+    openQuizConfigurator();
+  }, [openQuizConfigurator]);
+
+  const handleRetryMistakes = useCallback((wineNames) => {
+    const targets = [...new Set(wineNames)].filter(Boolean);
+    if (targets.length === 0) return;
+
+    setQuizConfig({
+      selectedModes: ['category-match'],
+      selectedCategories: [],
+      questionCount: targets.length,
+      sessionKind: 'review',
+      sessionId: createSessionId(),
+      targetWineNames: targets
+    });
+    setQuizState('playing');
   }, []);
 
   const renderContent = () => {
@@ -159,10 +219,13 @@ export function App() {
             questionCount={quizConfig.questionCount}
             wineData={wineData}
             difficulty={progress.settings.difficulty}
+            sessionKind={quizConfig.sessionKind}
+            sessionId={quizConfig.sessionId}
+            targetWineNames={quizConfig.targetWineNames}
             onAnswer={handleQuizAnswer}
             onComplete={handleQuizComplete}
             onExit={handleExitQuiz}
-            onReconfigure={() => setQuizState('configuring')}
+            onReconfigure={openQuizConfigurator}
             darkMode={progress.settings.darkMode}
             onToggleDarkMode={() => updateSettings({ darkMode: !progress.settings.darkMode })}
           />
@@ -174,7 +237,9 @@ export function App() {
           <QuizResults
             results={quizResults}
             onPlayAgain={handlePlayAgain}
+            onRetryMistakes={handleRetryMistakes}
             onGoHome={handleExitQuiz}
+            sessionKind={quizResults.sessionKind}
             darkMode={progress.settings.darkMode}
           />
         );
@@ -206,6 +271,7 @@ export function App() {
         return (
           <Settings
             settings={progress.settings}
+            isReadOnly={isReadOnly}
             onUpdateSettings={updateSettings}
             onResetProgress={resetProgress}
             onExportProgress={exportProgress}
@@ -220,7 +286,9 @@ export function App() {
           <Home
             progress={progress}
             wineData={wineData}
+            isReadOnly={isReadOnly}
             onStartQuiz={openQuizConfigurator}
+            onStartReview={handleStartReview}
             onNavigate={handleNavigate}
             darkMode={progress.settings.darkMode}
           />
@@ -230,6 +298,11 @@ export function App() {
 
   return (
     <div className={`app ${progress.settings.darkMode ? 'dark' : ''}`}>
+      {isReadOnly && (
+        <div className="offline-banner" role="status">
+          Progress was created by a newer app version. This copy is read-only to keep it safe.
+        </div>
+      )}
       {!isOnline && (
         <div className="offline-banner">
           Offline - Using cached data

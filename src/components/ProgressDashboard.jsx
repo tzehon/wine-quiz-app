@@ -1,83 +1,21 @@
 import { useMemo } from 'react';
+import { useCurrentTime } from '../hooks/useCurrentTime';
 import {
-  calculateOverallMastery,
-  calculateCategoryMastery,
-  getMasteryLevel,
-  getWinesDueForReview,
-  countWinesLearned
-} from '../utils/calculateMastery';
+  buildActivityCalendar,
+  getProgressSummary
+} from '../utils/progressMetrics';
 
 export function ProgressDashboard({ progress, wineData, darkMode }) {
-  const stats = useMemo(() => {
-    const winesLearned = countWinesLearned(progress.wineProgress);
-    const totalWines = wineData?.styles.reduce((acc, s) => acc + s.wines.length, 0) || 0;
-    const overallMastery = calculateOverallMastery(progress.wineProgress);
-    const winesDue = getWinesDueForReview(progress.wineProgress);
-
-    return {
-      winesLearned,
-      totalWines,
-      overallMastery,
-      masteryLevel: getMasteryLevel(overallMastery),
-      winesDueForReview: winesDue.length,
-      currentStreak: progress.streakData.currentStreak,
-      longestStreak: progress.streakData.longestStreak,
-      totalQuizzes: progress.stats.totalQuizzes,
-      totalQuestions: progress.stats.totalQuestions
-    };
-  }, [progress, wineData]);
-
-  const categoryStats = useMemo(() => {
-    if (!wineData) return [];
-
-    return wineData.styles.map(style => {
-      const categoryProgress = progress.categoryProgress[style.id];
-      const mastery = calculateCategoryMastery(categoryProgress);
-      const winesInCategory = style.wines.length;
-      const winesLearnedInCategory = style.wines.filter(
-        w => progress.wineProgress[w.name]?.timesCorrect > 0
-      ).length;
-
-      return {
-        id: style.id,
-        name: style.name,
-        color: style.color,
-        mastery,
-        winesLearned: winesLearnedInCategory,
-        totalWines: winesInCategory,
-        timesCorrect: categoryProgress?.timesCorrect || 0,
-        timesIncorrect: categoryProgress?.timesIncorrect || 0
-      };
-    });
-  }, [progress, wineData]);
-
-  // Generate streak calendar for last 30 days
-  const streakCalendar = useMemo(() => {
-    const days = [];
-    const today = new Date();
-    const lastQuizDate = progress.streakData.lastQuizDate
-      ? new Date(progress.streakData.lastQuizDate)
-      : null;
-
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-
-      // Check if this day was active (simplified - only tracks last quiz date)
-      const isActive = lastQuizDate &&
-        dateStr === lastQuizDate.toISOString().split('T')[0];
-
-      days.push({
-        date: dateStr,
-        day: date.getDate(),
-        isActive,
-        isToday: i === 0
-      });
-    }
-
-    return days;
-  }, [progress.streakData.lastQuizDate]);
+  const now = useCurrentTime();
+  const stats = useMemo(
+    () => getProgressSummary(progress, wineData, now),
+    [now, progress, wineData]
+  );
+  const streakCalendar = useMemo(
+    () => buildActivityCalendar(progress.streakData.activityDates, now),
+    [now, progress.streakData.activityDates]
+  );
+  const trackedQuestions = stats.totalQuestions - stats.untrackedQuestionCount;
 
   return (
     <div className={`progress-dashboard ${darkMode ? 'dark' : ''}`}>
@@ -85,60 +23,74 @@ export function ProgressDashboard({ progress, wineData, darkMode }) {
 
       <div className="stats-grid">
         <div className="stat-card primary">
-          <div className="stat-value">{stats.overallMastery}%</div>
-          <div className="stat-label">Overall Mastery</div>
-          <div className="stat-sublabel">{stats.masteryLevel}</div>
+          <div className="stat-value">
+            {stats.accuracyPercent === null ? '—' : `${stats.accuracyPercent}%`}
+          </div>
+          <div className="stat-label">Tracked Accuracy</div>
+          <div className="stat-sublabel">
+            {stats.accuracyPercent === null
+              ? 'Answer a quiz to begin accuracy tracking'
+              : 'Accuracy since tracking began'}
+          </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-value">{stats.winesLearned}/{stats.totalWines}</div>
-          <div className="stat-label">Wines Learned</div>
+          <div className="stat-value">{stats.practicedCount}/{stats.catalogTotal}</div>
+          <div className="stat-label">Wines Practiced</div>
         </div>
 
         <div className="stat-card streak">
-          <div className="stat-value">{stats.currentStreak}</div>
+          <div className="stat-value">{stats.streak.current}</div>
           <div className="stat-label">Day Streak</div>
-          <div className="stat-sublabel">Best: {stats.longestStreak}</div>
+          <div className="stat-sublabel">Best: {stats.streak.longest}</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-value">{stats.winesDueForReview}</div>
-          <div className="stat-label">Due for Review</div>
+          <div className="stat-value">{stats.dueCount}</div>
+          <div className="stat-label">Style Reviews Due</div>
+          <div className="stat-sublabel">{stats.scheduledCount} scheduled</div>
         </div>
       </div>
 
       <section className="progress-section">
-        <h3>Category Mastery</h3>
+        <h3>Category Practice</h3>
         <div className="category-progress-list">
-          {categoryStats.map(category => (
-            <div key={category.id} className="category-progress-item">
-              <div className="category-header">
-                <span
-                  className="category-dot"
-                  style={{ backgroundColor: category.color }}
-                />
-                <span className="category-name">{category.name}</span>
-                <span className="category-stats">
-                  {category.winesLearned}/{category.totalWines} wines
-                </span>
+          {stats.categoryCoverage.map(category => {
+            const practicePercent = category.total > 0
+              ? Math.round((category.practiced / category.total) * 100)
+              : 0;
+            const answerStats = progress.categoryProgress[category.id];
+
+            return (
+              <div key={category.id} className="category-progress-item">
+                <div className="category-header">
+                  <span
+                    className="category-dot"
+                    style={{ backgroundColor: category.color }}
+                  />
+                  <span className="category-name">{category.name}</span>
+                  <span className="category-stats">
+                    {category.practiced}/{category.total} wines
+                  </span>
+                </div>
+                <div className="progress-bar-container">
+                  <div
+                    className="progress-bar-fill"
+                    style={{
+                      width: `${practicePercent}%`,
+                      backgroundColor: category.color
+                    }}
+                  />
+                </div>
+                <div className="category-footer">
+                  <span className="mastery-percent">{practicePercent}% practiced</span>
+                  <span className="answer-stats">
+                    {answerStats?.timesCorrect || 0} correct / {answerStats?.timesIncorrect || 0} incorrect
+                  </span>
+                </div>
               </div>
-              <div className="progress-bar-container">
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    width: `${category.mastery}%`,
-                    backgroundColor: category.color
-                  }}
-                />
-              </div>
-              <div className="category-footer">
-                <span className="mastery-percent">{category.mastery}%</span>
-                <span className="answer-stats">
-                  {category.timesCorrect} correct / {category.timesIncorrect} incorrect
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -161,24 +113,23 @@ export function ProgressDashboard({ progress, wineData, darkMode }) {
         <h3>Quiz Statistics</h3>
         <div className="quiz-stats">
           <div className="quiz-stat">
-            <span className="quiz-stat-value">{stats.totalQuizzes}</span>
-            <span className="quiz-stat-label">Total Quizzes</span>
+            <span className="quiz-stat-value">{progress.stats.totalQuizzes}</span>
+            <span className="quiz-stat-label">Completed Sessions</span>
           </div>
           <div className="quiz-stat">
             <span className="quiz-stat-value">{stats.totalQuestions}</span>
             <span className="quiz-stat-label">Questions Answered</span>
           </div>
           <div className="quiz-stat">
-            <span className="quiz-stat-value">
-              {stats.totalQuestions > 0
-                ? Math.round((Object.values(progress.wineProgress)
-                    .reduce((acc, p) => acc + (p.timesCorrect || 0), 0) /
-                    stats.totalQuestions) * 100)
-                : 0}%
-            </span>
-            <span className="quiz-stat-label">Accuracy</span>
+            <span className="quiz-stat-value">{trackedQuestions}</span>
+            <span className="quiz-stat-label">Accuracy Tracked</span>
           </div>
         </div>
+        {stats.untrackedQuestionCount > 0 && (
+          <p className="tracking-note">
+            {stats.untrackedQuestionCount} earlier question{stats.untrackedQuestionCount === 1 ? '' : 's'} predate accuracy tracking.
+          </p>
+        )}
       </section>
     </div>
   );

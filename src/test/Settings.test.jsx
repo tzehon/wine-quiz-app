@@ -95,4 +95,17 @@ describe('Settings', () => {
       expect(screen.queryByText('Are you sure? This cannot be undone.')).not.toBeInTheDocument()
     })
   })
+
+  it('disables incompatible settings while keeping recovery actions available', () => {
+    renderSettings({ isReadOnly: true })
+
+    expect(screen.getByRole('button', { name: 'Dark mode' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: 'Category Match' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /easy/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '20' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Export Progress' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Import Progress' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Reset All Progress' })).toBeEnabled()
+    expect(screen.getByText(/export this newer progress file/i)).toBeInTheDocument()
+  })
 })

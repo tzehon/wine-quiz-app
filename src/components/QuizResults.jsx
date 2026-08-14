@@ -1,5 +1,31 @@
-export function QuizResults({ results, onPlayAgain, onGoHome, darkMode }) {
-  const percentage = Math.round((results.score / results.total) * 100);
+function getQuestionLabel(question) {
+  return question.wine?.name ||
+    question.style?.name ||
+    question.oddWine ||
+    question.statement ||
+    question.description ||
+    'Question';
+}
+
+function getRetryWineNames(answers) {
+  return [...new Set(
+    answers
+      .map(answer => answer.question.wine?.name || answer.question.oddWine)
+      .filter(Boolean)
+  )];
+}
+
+export function QuizResults({
+  results,
+  sessionKind = 'practice',
+  onPlayAgain,
+  onRetryMistakes,
+  onGoHome,
+  darkMode
+}) {
+  const percentage = results.total > 0
+    ? Math.round((results.score / results.total) * 100)
+    : 0;
 
   const getMessage = () => {
     if (percentage === 100) return { emoji: '🏆', text: 'Perfect Score!' };
@@ -13,12 +39,16 @@ export function QuizResults({ results, onPlayAgain, onGoHome, darkMode }) {
 
   // Group incorrect answers
   const incorrectAnswers = results.answers.filter(a => !a.isCorrect);
+  const retryWineNames = getRetryWineNames(incorrectAnswers);
 
   return (
     <div className={`quiz-results ${darkMode ? 'dark' : ''}`}>
       <div className="results-header">
         <div className="result-emoji">{message.emoji}</div>
-        <h2>{message.text}</h2>
+        <h2>{sessionKind === 'review' ? 'Review Complete' : message.text}</h2>
+        {sessionKind === 'review' && (
+          <p className="result-message">{message.text}</p>
+        )}
         <div className="score-display">
           <span className="score-value">{results.score}</span>
           <span className="score-divider">/</span>
@@ -29,15 +59,12 @@ export function QuizResults({ results, onPlayAgain, onGoHome, darkMode }) {
 
       {incorrectAnswers.length > 0 && (
         <div className="review-section">
-          <h3>Review These Wines</h3>
+          <h3>Review These Answers</h3>
           <div className="review-list">
-            {incorrectAnswers.map((answer, index) => (
-              <div key={index} className="review-item">
+            {incorrectAnswers.map((answer) => (
+              <div key={answer.question.id || getQuestionLabel(answer.question)} className="review-item">
                 <div className="review-question">
-                  {answer.question.wine?.name ||
-                   answer.question.style?.name ||
-                   answer.question.statement ||
-                   'Question'}
+                  {getQuestionLabel(answer.question)}
                 </div>
                 {answer.details?.explanation && (
                   <div className="review-explanation">
@@ -51,9 +78,19 @@ export function QuizResults({ results, onPlayAgain, onGoHome, darkMode }) {
       )}
 
       <div className="results-actions">
-        <button className="primary-btn" onClick={onPlayAgain}>
-          Play Again
-        </button>
+        {sessionKind === 'practice' && (
+          <button className="primary-btn" onClick={onPlayAgain}>
+            Play Again
+          </button>
+        )}
+        {sessionKind === 'review' && retryWineNames.length > 0 && (
+          <button
+            className="primary-btn"
+            onClick={() => onRetryMistakes?.(retryWineNames)}
+          >
+            Retry Mistakes
+          </button>
+        )}
         <button className="secondary-btn" onClick={onGoHome}>
           Go Home
         </button>
