@@ -66,9 +66,30 @@ npm run dev
 # Build for production
 npm run build
 
+# Run the test suite once
+npm test
+
+# Run tests with the coverage gate
+npm run test:coverage
+
 # Preview production build
 npm run preview
 ```
+
+## Validation
+
+Run the full local validation set before opening a pull request:
+
+```bash
+npm run lint
+npm test
+npm run test:coverage
+npm run build
+```
+
+Use `npm run test:watch` while developing. Coverage gates the quiz configuration,
+session engine, progress migration, speech controls, and the UI paths changed by
+the reliability work.
 
 ## Project Structure
 
