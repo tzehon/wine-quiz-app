@@ -17,11 +17,12 @@ This file applies to the whole repository.
 npm install
 npm run dev
 npm run lint
+npm test
+npm run test:watch
+npm run test:coverage
 npm run build
 npm run preview
 ```
-
-No automated test framework is currently configured.
 
 ## Working constraints
 
@@ -33,7 +34,8 @@ No automated test framework is currently configured.
 
 ## Verification
 
-- Run `npm run lint` and `npm run build` after code changes.
+- Run `npm run lint`, `npm test`, and `npm run build` after code changes.
+- Run `npm run test:coverage` when changing tested behavior or expanding the coverage scope.
 - For UI changes, manually exercise the affected flow at desktop and mobile widths, including its empty, error, and feedback states where relevant.
 - For progress or quiz changes, verify a complete quiz, results, progress persistence after reload, and export/import compatibility.
 - Report any pre-existing validation failures separately from regressions introduced by the change.
