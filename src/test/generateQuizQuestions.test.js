@@ -184,6 +184,8 @@ describe('generateQuizQuestions', () => {
 
     expect(() => generateQuizQuestions({ ...validConfig, questionCount: 0 }))
       .toThrow('Question count must be a positive integer no greater than 100.')
+    expect(() => generateQuizQuestions(validConfig))
+      .toThrow('Question count is required.')
     expect(() => generateQuizQuestions({ ...validConfig, questionCount: '10' }))
       .toThrow('Question count must be a positive integer no greater than 100.')
     expect(() => generateQuizQuestions({ ...validConfig, questionCount: 101 }))
