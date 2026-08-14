@@ -1,22 +1,11 @@
 import { useState, useRef } from 'react';
-
-const allQuizModes = [
-  { id: 'category-match', name: 'Category Match' },
-  { id: 'wine-selection', name: 'Wine Selection' },
-  { id: 'pronunciation', name: 'Pronunciation' },
-  { id: 'quick-fire', name: 'Quick Fire' },
-  { id: 'description-match', name: 'Description Match' },
-  { id: 'odd-one-out', name: 'Odd One Out' },
-  { id: 'origin-match', name: 'Origin Match' }
-];
+import { QUIZ_MODES, QUIZ_QUESTION_COUNTS } from '../quiz/quizModes';
 
 const difficultyOptions = [
   { id: 'easy', name: 'Easy', description: '3 options per question' },
   { id: 'medium', name: 'Medium', description: '4 options per question' },
   { id: 'hard', name: 'Hard', description: '5 options per question' }
 ];
-
-const questionCountOptions = [5, 10, 15, 20];
 
 export function Settings({
   settings,
@@ -97,6 +86,8 @@ export function Settings({
             <button
               className={`toggle-btn ${darkMode ? 'active' : ''}`}
               onClick={onToggleDarkMode}
+              aria-pressed={darkMode}
+              aria-label="Dark mode"
             >
               <span className="toggle-track">
                 <span className="toggle-thumb" />
@@ -110,7 +101,7 @@ export function Settings({
         <h3>Quiz Modes</h3>
         <p className="section-description">Enable or disable quiz modes</p>
         <div className="mode-toggles">
-          {allQuizModes.map(mode => (
+          {QUIZ_MODES.map(mode => (
             <label key={mode.id} className="setting-item checkbox-item">
               <input
                 type="checkbox"
@@ -131,6 +122,7 @@ export function Settings({
               key={option.id}
               className={`difficulty-btn ${settings.difficulty === option.id ? 'selected' : ''}`}
               onClick={() => handleDifficultyChange(option.id)}
+              aria-pressed={settings.difficulty === option.id}
             >
               <span className="difficulty-name">{option.name}</span>
               <span className="difficulty-desc">{option.description}</span>
@@ -142,11 +134,12 @@ export function Settings({
       <section className="settings-section">
         <h3>Default Questions per Session</h3>
         <div className="question-count-options">
-          {questionCountOptions.map(count => (
+          {QUIZ_QUESTION_COUNTS.map(count => (
             <button
               key={count}
               className={`count-btn ${settings.questionsPerSession === count ? 'selected' : ''}`}
               onClick={() => handleQuestionCountChange(count)}
+              aria-pressed={settings.questionsPerSession === count}
             >
               {count}
             </button>

@@ -8,25 +8,10 @@ export function QuickFire({ question, onAnswer, showFeedback, onTimeUp, darkMode
   const answeredRef = useRef(false);
 
   useEffect(() => {
-    answeredRef.current = false;
-    setTimeLeft(TIMER_DURATION);
+    if (showFeedback) return undefined;
 
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          if (!answeredRef.current && !showFeedback) {
-            answeredRef.current = true;
-            onTimeUp(null, false, {
-              wineName: question.wine.name,
-              categoryId: question.wine.styleId,
-              explanation: `Time's up! The answer was ${question.isTrue ? 'Yes' : 'No'}.`
-            });
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft(prev => Math.max(0, prev - 1));
     }, 1000);
 
     return () => {
@@ -34,7 +19,18 @@ export function QuickFire({ question, onAnswer, showFeedback, onTimeUp, darkMode
         clearInterval(timerRef.current);
       }
     };
-  }, [question]);
+  }, [showFeedback]);
+
+  useEffect(() => {
+    if (timeLeft !== 0 || answeredRef.current || showFeedback) return;
+
+    answeredRef.current = true;
+    onTimeUp(null, false, {
+      wineName: question.wine.name,
+      categoryId: question.wine.styleId,
+      explanation: `Time's up! The answer was ${question.isTrue ? 'Yes' : 'No'}.`
+    });
+  }, [onTimeUp, question, showFeedback, timeLeft]);
 
   const handleAnswer = (userAnswer) => {
     if (showFeedback || answeredRef.current) return;
@@ -66,7 +62,7 @@ export function QuickFire({ question, onAnswer, showFeedback, onTimeUp, darkMode
             backgroundColor: timerColor
           }}
         />
-        <span className="timer-text">{timeLeft}s</span>
+        <span className="timer-text" role="timer" aria-live="polite">{timeLeft}s</span>
       </div>
 
       <div className="question-prompt">

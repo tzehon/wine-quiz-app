@@ -1,8 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+  DEFAULT_QUIZ_MODE_IDS,
+  QUIZ_DIFFICULTIES,
+  QUIZ_MODE_IDS,
+  QUIZ_QUESTION_COUNTS
+} from '../quiz/quizModes';
 
 const PROGRESS_KEY = 'wineQuizProgress';
 
-const defaultProgress = {
+const createDefaultSettings = () => ({
+  enabledModes: [...DEFAULT_QUIZ_MODE_IDS],
+  focusCategories: [],
+  difficulty: 'medium',
+  questionsPerSession: 10,
+  darkMode: false
+});
+
+const createDefaultProgress = () => ({
   wineProgress: {},
   categoryProgress: {},
   streakData: {
@@ -10,18 +24,122 @@ const defaultProgress = {
     longestStreak: 0,
     lastQuizDate: null
   },
-  settings: {
-    enabledModes: ['category-match', 'wine-selection', 'pronunciation', 'quick-fire', 'description-match', 'odd-one-out', 'origin-match'],
-    focusCategories: [],
-    difficulty: 'medium',
-    questionsPerSession: 10,
-    darkMode: false
-  },
+  settings: createDefaultSettings(),
   stats: {
     totalQuizzes: 0,
     totalQuestions: 0
   }
-};
+});
+
+const validQuizModeIds = new Set(QUIZ_MODE_IDS);
+const validDifficulties = new Set(QUIZ_DIFFICULTIES);
+const validQuestionCounts = new Set(QUIZ_QUESTION_COUNTS);
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeCounter(value) {
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+}
+
+function normalizeNullableString(value) {
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeEnabledModes(enabledModes) {
+  if (!Array.isArray(enabledModes)) {
+    return [...DEFAULT_QUIZ_MODE_IDS];
+  }
+
+  const normalized = [...new Set(enabledModes.filter(modeId => validQuizModeIds.has(modeId)))];
+  return normalized.length > 0 ? normalized : [...DEFAULT_QUIZ_MODE_IDS];
+}
+
+function normalizeSettings(settings) {
+  const defaults = createDefaultSettings();
+  const value = isRecord(settings) ? settings : {};
+
+  return {
+    ...defaults,
+    ...value,
+    enabledModes: normalizeEnabledModes(value.enabledModes),
+    focusCategories: Array.isArray(value.focusCategories)
+      ? [...new Set(value.focusCategories.filter(categoryId => typeof categoryId === 'string'))]
+      : defaults.focusCategories,
+    difficulty: validDifficulties.has(value.difficulty)
+      ? value.difficulty
+      : defaults.difficulty,
+    questionsPerSession: validQuestionCounts.has(value.questionsPerSession)
+      ? value.questionsPerSession
+      : defaults.questionsPerSession,
+    darkMode: typeof value.darkMode === 'boolean' ? value.darkMode : defaults.darkMode
+  };
+}
+
+function normalizeWineProgress(wineProgress) {
+  if (!isRecord(wineProgress)) return {};
+
+  return Object.fromEntries(
+    Object.entries(wineProgress)
+      .filter(([, value]) => isRecord(value))
+      .map(([wineName, value]) => [wineName, {
+        ...value,
+        timesCorrect: normalizeCounter(value.timesCorrect),
+        timesIncorrect: normalizeCounter(value.timesIncorrect),
+        lastSeen: normalizeNullableString(value.lastSeen),
+        nextReview: normalizeNullableString(value.nextReview),
+        easeFactor: Number.isFinite(value.easeFactor) && value.easeFactor > 0
+          ? value.easeFactor
+          : 2.5
+      }])
+  );
+}
+
+function normalizeCategoryProgress(categoryProgress) {
+  if (!isRecord(categoryProgress)) return {};
+
+  return Object.fromEntries(
+    Object.entries(categoryProgress)
+      .filter(([, value]) => isRecord(value))
+      .map(([categoryId, value]) => [categoryId, {
+        ...value,
+        timesCorrect: normalizeCounter(value.timesCorrect),
+        timesIncorrect: normalizeCounter(value.timesIncorrect)
+      }])
+  );
+}
+
+function normalizeSavedProgress(savedProgress) {
+  const defaults = createDefaultProgress();
+  if (!savedProgress || typeof savedProgress !== 'object' || Array.isArray(savedProgress)) {
+    return defaults;
+  }
+
+  const savedStreak = isRecord(savedProgress.streakData) ? savedProgress.streakData : {};
+  const savedStats = isRecord(savedProgress.stats) ? savedProgress.stats : {};
+
+  return {
+    ...defaults,
+    ...savedProgress,
+    wineProgress: normalizeWineProgress(savedProgress.wineProgress),
+    categoryProgress: normalizeCategoryProgress(savedProgress.categoryProgress),
+    streakData: {
+      ...defaults.streakData,
+      ...savedStreak,
+      currentStreak: normalizeCounter(savedStreak.currentStreak),
+      longestStreak: normalizeCounter(savedStreak.longestStreak),
+      lastQuizDate: normalizeNullableString(savedStreak.lastQuizDate)
+    },
+    settings: normalizeSettings(savedProgress.settings),
+    stats: {
+      ...defaults.stats,
+      ...savedStats,
+      totalQuizzes: normalizeCounter(savedStats.totalQuizzes),
+      totalQuestions: normalizeCounter(savedStats.totalQuestions)
+    }
+  };
+}
 
 /**
  * Hook for managing user progress in localStorage
@@ -31,12 +149,12 @@ export function useProgress() {
     const saved = localStorage.getItem(PROGRESS_KEY);
     if (saved) {
       try {
-        return { ...defaultProgress, ...JSON.parse(saved) };
+        return normalizeSavedProgress(JSON.parse(saved));
       } catch {
-        return defaultProgress;
+        return createDefaultProgress();
       }
     }
-    return defaultProgress;
+    return createDefaultProgress();
   });
 
   // Save to localStorage whenever progress changes
@@ -149,10 +267,7 @@ export function useProgress() {
   const updateSettings = useCallback((newSettings) => {
     setProgress(prev => ({
       ...prev,
-      settings: {
-        ...prev.settings,
-        ...newSettings
-      }
+      settings: normalizeSettings({ ...prev.settings, ...newSettings })
     }));
   }, []);
 
@@ -169,7 +284,7 @@ export function useProgress() {
 
   // Reset all progress
   const resetProgress = useCallback(() => {
-    setProgress(defaultProgress);
+    setProgress(createDefaultProgress());
     localStorage.removeItem(PROGRESS_KEY);
   }, []);
 
@@ -189,7 +304,10 @@ export function useProgress() {
   const importProgress = useCallback((jsonData) => {
     try {
       const imported = JSON.parse(jsonData);
-      setProgress({ ...defaultProgress, ...imported });
+      if (!imported || typeof imported !== 'object' || Array.isArray(imported)) {
+        return false;
+      }
+      setProgress(normalizeSavedProgress(imported));
       return true;
     } catch {
       return false;

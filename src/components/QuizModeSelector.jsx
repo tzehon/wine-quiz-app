@@ -1,45 +1,5 @@
-import { useState } from 'react';
-
-const quizModes = [
-  {
-    id: 'category-match',
-    name: 'Category Match',
-    description: 'Match wines to their style category',
-    icon: '🏷️'
-  },
-  {
-    id: 'wine-selection',
-    name: 'Wine Selection',
-    description: 'Select all wines in a category',
-    icon: '☑️'
-  },
-  {
-    id: 'quick-fire',
-    name: 'Quick Fire',
-    description: 'Rapid yes/no questions with timer',
-    icon: '⚡'
-  },
-  {
-    id: 'description-match',
-    name: 'Description Match',
-    description: 'Match descriptions to categories',
-    icon: '📝'
-  },
-  {
-    id: 'odd-one-out',
-    name: 'Odd One Out',
-    description: 'Find the wine that doesn\'t belong',
-    icon: '🔍'
-  },
-  {
-    id: 'origin-match',
-    name: 'Origin Match',
-    description: 'Match wines to their country',
-    icon: '🌍'
-  }
-];
-
-const questionCounts = [5, 10, 15, 20];
+import { getQuizConfigurationErrors } from '../quiz/generateQuizQuestions';
+import { QUIZ_MODES, QUIZ_QUESTION_COUNTS } from '../quiz/quizModes';
 
 export function QuizModeSelector({
   enabledModes,
@@ -53,7 +13,16 @@ export function QuizModeSelector({
   onStartQuiz,
   darkMode
 }) {
-  const [selectAll, setSelectAll] = useState(selectedModes.length === enabledModes.length);
+  const visibleModes = QUIZ_MODES.filter(mode => enabledModes.includes(mode.id));
+  const visibleModeIds = visibleModes.map(mode => mode.id);
+  const allModesSelected = visibleModeIds.length > 0 &&
+    visibleModeIds.every(modeId => selectedModes.includes(modeId));
+  const configurationErrors = getQuizConfigurationErrors({
+    selectedModes,
+    selectedCategories,
+    wineData: { styles: categories },
+    questionCount
+  });
 
   const handleModeToggle = (modeId) => {
     if (selectedModes.includes(modeId)) {
@@ -64,12 +33,7 @@ export function QuizModeSelector({
   };
 
   const handleSelectAllModes = () => {
-    if (selectAll) {
-      onModesChange([]);
-    } else {
-      onModesChange([...enabledModes]);
-    }
-    setSelectAll(!selectAll);
+    onModesChange(allModesSelected ? [] : visibleModeIds);
   };
 
   const handleCategoryToggle = (categoryId) => {
@@ -88,7 +52,7 @@ export function QuizModeSelector({
     }
   };
 
-  const canStart = selectedModes.length > 0 && selectedCategories.length > 0;
+  const canStart = configurationErrors.length === 0;
 
   return (
     <div className={`quiz-mode-selector ${darkMode ? 'dark' : ''}`}>
@@ -101,17 +65,16 @@ export function QuizModeSelector({
             className="select-all-btn"
             onClick={handleSelectAllModes}
           >
-            {selectAll ? 'Deselect All' : 'Select All'}
+            {allModesSelected ? 'Deselect All' : 'Select All'}
           </button>
         </div>
         <div className="mode-grid">
-          {quizModes
-            .filter(mode => enabledModes.includes(mode.id))
-            .map(mode => (
+          {visibleModes.map(mode => (
               <button
                 key={mode.id}
                 className={`mode-card ${selectedModes.includes(mode.id) ? 'selected' : ''}`}
                 onClick={() => handleModeToggle(mode.id)}
+                aria-pressed={selectedModes.includes(mode.id)}
               >
                 <span className="mode-icon">{mode.icon}</span>
                 <span className="mode-name">{mode.name}</span>
@@ -137,6 +100,7 @@ export function QuizModeSelector({
               key={category.id}
               className={`category-chip ${selectedCategories.includes(category.id) ? 'selected' : ''}`}
               onClick={() => handleCategoryToggle(category.id)}
+              aria-pressed={selectedCategories.includes(category.id)}
               style={{
                 '--category-color': category.color,
                 backgroundColor: selectedCategories.includes(category.id) ? category.color : 'transparent'
@@ -151,17 +115,26 @@ export function QuizModeSelector({
       <section className="selector-section">
         <h3>Questions</h3>
         <div className="question-count-selector">
-          {questionCounts.map(count => (
+          {QUIZ_QUESTION_COUNTS.map(count => (
             <button
               key={count}
               className={`count-btn ${questionCount === count ? 'selected' : ''}`}
               onClick={() => onQuestionCountChange(count)}
+              aria-pressed={questionCount === count}
             >
               {count}
             </button>
           ))}
         </div>
       </section>
+
+      {configurationErrors.length > 0 && (
+        <div className="quiz-config-errors" role="alert">
+          {configurationErrors.map(error => (
+            <p key={error}>{error}</p>
+          ))}
+        </div>
+      )}
 
       <button
         className="start-quiz-btn"

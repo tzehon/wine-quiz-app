@@ -37,24 +37,25 @@ export function OddOneOut({ question, onAnswer, showFeedback, darkMode }) {
 
       <div className="wine-cards">
         {question.options.map((option, index) => (
-          <button
-            key={index}
-            className={`wine-card ${
-              showFeedback
-                ? option.isOdd
-                  ? 'correct'
-                  : 'incorrect'
-                : ''
-            }`}
-            onClick={() => handleSelect(option)}
-            disabled={showFeedback}
-          >
-            <span className="wine-name">{option.name}</span>
-            <SpeakButton text={option.name} />
-            {showFeedback && (
-              <span className="wine-category">{option.styleName}</span>
-            )}
-          </button>
+          <div className="wine-card-wrapper" key={`${option.name}-${index}`}>
+            <button
+              className={`wine-card ${
+                showFeedback
+                  ? option.isOdd
+                    ? 'correct'
+                    : 'incorrect'
+                  : ''
+              }`}
+              onClick={() => handleSelect(option)}
+              disabled={showFeedback}
+            >
+              <span className="wine-name">{option.name}</span>
+              {showFeedback && (
+                <span className="wine-category">{option.styleName}</span>
+              )}
+            </button>
+            <SpeakButton text={option.name} className="wine-card-speak" />
+          </div>
         ))}
       </div>
     </div>
