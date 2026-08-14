@@ -2,17 +2,15 @@ import { useState, useEffect } from 'react';
 import { speakWineName, isSpeechSupported } from '../utils/speak';
 
 export function SpeakButton({ text, className = '' }) {
-  const [isSupported, setIsSupported] = useState(false);
+  const [isSupported] = useState(isSpeechSupported);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
-    setIsSupported(isSpeechSupported());
-
     // Load voices (needed for some browsers)
-    if (isSpeechSupported()) {
+    if (isSupported) {
       window.speechSynthesis.getVoices();
     }
-  }, []);
+  }, [isSupported]);
 
   const handleSpeak = (e) => {
     e.preventDefault();
@@ -34,6 +32,7 @@ export function SpeakButton({ text, className = '' }) {
       className={`speak-btn ${isSpeaking ? 'speaking' : ''} ${className}`}
       onClick={handleSpeak}
       title={`Listen to pronunciation of "${text}"`}
+      aria-label={`Listen to pronunciation of ${text}`}
       type="button"
     >
       {isSpeaking ? '🔊' : '🔈'}

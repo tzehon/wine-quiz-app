@@ -10,7 +10,7 @@ export function speakWineName(name, lang = 'it-IT') {
   const voices = window.speechSynthesis.getVoices();
 
   // Prefer voices in this order for wine pronunciation
-  const preferredLangs = ['it-IT', 'fr-FR', 'es-ES', 'de-DE', 'en-GB'];
+  const preferredLangs = [...new Set([lang, 'it-IT', 'fr-FR', 'es-ES', 'de-DE', 'en-GB'])];
 
   for (const preferred of preferredLangs) {
     const voice = voices.find(v => v.lang === preferred);

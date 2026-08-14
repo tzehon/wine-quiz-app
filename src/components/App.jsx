@@ -9,7 +9,6 @@ import { ProgressDashboard } from './ProgressDashboard';
 import { Settings } from './Settings';
 import { useWineData } from '../hooks/useWineData';
 import { useProgress } from '../hooks/useProgress';
-import { useSpacedRepetition } from '../hooks/useSpacedRepetition';
 
 export function App() {
   const [currentView, setCurrentView] = useState('home');
@@ -29,7 +28,6 @@ export function App() {
     error,
     lastUpdated,
     refresh,
-    getAllWines,
     getAllStyles
   } = useWineData();
 
@@ -46,11 +44,6 @@ export function App() {
     importProgress,
     markWineStudyStatus
   } = useProgress();
-
-  const { calculateUpdatedProgress } = useSpacedRepetition(
-    progress.wineProgress,
-    getAllWines()
-  );
 
   // Monitor online status
   useEffect(() => {
@@ -71,28 +64,25 @@ export function App() {
     document.body.classList.toggle('dark-mode', progress.settings.darkMode);
   }, [progress.settings.darkMode]);
 
-  // Initialize quiz config with settings and all categories
-  useEffect(() => {
-    const allCategoryIds = getAllStyles().map(s => s.id);
-    setQuizConfig(prev => ({
-      ...prev,
+  const openQuizConfigurator = useCallback(() => {
+    setQuizConfig({
       selectedModes: [...progress.settings.enabledModes],
-      selectedCategories: allCategoryIds,
+      selectedCategories: getAllStyles().map(style => style.id),
       questionCount: progress.settings.questionsPerSession
-    }));
-  }, [progress.settings.enabledModes, progress.settings.questionsPerSession, getAllStyles]);
-
-  const handleNavigate = useCallback((view) => {
-    setCurrentView(view);
-    if (view !== 'quiz') {
-      setQuizState('idle');
-    }
-  }, []);
-
-  const handleStartQuiz = useCallback(() => {
+    });
     setCurrentView('quiz');
     setQuizState('configuring');
-  }, []);
+  }, [getAllStyles, progress.settings.enabledModes, progress.settings.questionsPerSession]);
+
+  const handleNavigate = useCallback((view) => {
+    if (view === 'quiz') {
+      openQuizConfigurator();
+      return;
+    }
+
+    setCurrentView(view);
+    setQuizState('idle');
+  }, [openQuizConfigurator]);
 
   const handleBeginQuiz = useCallback(() => {
     setQuizState('playing');
@@ -168,11 +158,11 @@ export function App() {
             selectedCategories={quizConfig.selectedCategories}
             questionCount={quizConfig.questionCount}
             wineData={wineData}
-            pronunciations={pronunciations}
             difficulty={progress.settings.difficulty}
             onAnswer={handleQuizAnswer}
             onComplete={handleQuizComplete}
             onExit={handleExitQuiz}
+            onReconfigure={() => setQuizState('configuring')}
             darkMode={progress.settings.darkMode}
             onToggleDarkMode={() => updateSettings({ darkMode: !progress.settings.darkMode })}
           />
@@ -230,7 +220,7 @@ export function App() {
           <Home
             progress={progress}
             wineData={wineData}
-            onStartQuiz={handleStartQuiz}
+            onStartQuiz={openQuizConfigurator}
             onNavigate={handleNavigate}
             darkMode={progress.settings.darkMode}
           />

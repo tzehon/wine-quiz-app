@@ -464,6 +464,20 @@ body {
   cursor: not-allowed;
 }
 
+.quiz-config-errors {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--error);
+  border-radius: var(--radius-md);
+  background: rgba(169, 68, 66, 0.1);
+  color: var(--error);
+  font-size: 0.875rem;
+}
+
+.quiz-config-errors p + p {
+  margin-top: var(--spacing-xs);
+}
+
 /* Quiz Engine */
 .quiz-engine {
   min-height: calc(100vh - 100px);
@@ -1009,6 +1023,11 @@ body {
   gap: var(--spacing-md);
 }
 
+.wine-card-wrapper {
+  position: relative;
+  min-width: 0;
+}
+
 .wine-card {
   display: flex;
   flex-direction: column;
@@ -1019,6 +1038,20 @@ body {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
+  width: 100%;
+  min-height: 100%;
+  padding-bottom: calc(var(--spacing-lg) + 1.5rem);
+}
+
+.wine-card-speak {
+  position: absolute;
+  bottom: var(--spacing-md);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.wine-card-speak:hover {
+  transform: translateX(-50%) scale(1.1);
 }
 
 .wine-card:hover:not(:disabled) {

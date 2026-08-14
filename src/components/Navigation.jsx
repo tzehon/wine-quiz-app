@@ -19,6 +19,7 @@ export function Navigation({ currentView, onNavigate, darkMode, onToggleDarkMode
             key={item.id}
             className={`nav-item ${currentView === item.id ? 'active' : ''}`}
             onClick={() => onNavigate(item.id)}
+            aria-current={currentView === item.id ? 'page' : undefined}
           >
             <span className="nav-icon">{item.icon}</span>
             <span className="nav-label">{item.label}</span>
