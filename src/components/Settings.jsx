@@ -9,6 +9,7 @@ const difficultyOptions = [
 
 export function Settings({
   settings,
+  isReadOnly = false,
   onUpdateSettings,
   onResetProgress,
   onExportProgress,
@@ -86,6 +87,7 @@ export function Settings({
             <button
               className={`toggle-btn ${darkMode ? 'active' : ''}`}
               onClick={onToggleDarkMode}
+              disabled={isReadOnly}
               aria-pressed={darkMode}
               aria-label="Dark mode"
             >
@@ -107,6 +109,7 @@ export function Settings({
                 type="checkbox"
                 checked={settings.enabledModes.includes(mode.id)}
                 onChange={() => handleModeToggle(mode.id)}
+                disabled={isReadOnly}
               />
               <span>{mode.name}</span>
             </label>
@@ -122,6 +125,7 @@ export function Settings({
               key={option.id}
               className={`difficulty-btn ${settings.difficulty === option.id ? 'selected' : ''}`}
               onClick={() => handleDifficultyChange(option.id)}
+              disabled={isReadOnly}
               aria-pressed={settings.difficulty === option.id}
             >
               <span className="difficulty-name">{option.name}</span>
@@ -139,6 +143,7 @@ export function Settings({
               key={count}
               className={`count-btn ${settings.questionsPerSession === count ? 'selected' : ''}`}
               onClick={() => handleQuestionCountChange(count)}
+              disabled={isReadOnly}
               aria-pressed={settings.questionsPerSession === count}
             >
               {count}
@@ -165,6 +170,12 @@ export function Settings({
             onChange={handleFileChange}
             style={{ display: 'none' }}
           />
+
+          {isReadOnly && (
+            <p className="tracking-note">
+              Export this newer progress file before importing or resetting it.
+            </p>
+          )}
 
           {importError && (
             <p className="error-message">{importError}</p>

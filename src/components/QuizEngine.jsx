@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
 import {
   generateQuizQuestions,
+  generateReviewQuestions,
   QuizConfigurationError
 } from '../quiz/generateQuizQuestions';
+import { getAnswerOutcome } from '../quiz/getAnswerOutcome';
 import { CategoryMatch } from '../quizModes/CategoryMatch';
 import { WineSelection } from '../quizModes/WineSelection';
 import { QuickFire } from '../quizModes/QuickFire';
@@ -16,6 +18,9 @@ export function QuizEngine({
   questionCount,
   wineData,
   difficulty,
+  sessionKind = 'practice',
+  sessionId,
+  targetWineNames = [],
   onAnswer,
   onComplete,
   onExit,
@@ -31,13 +36,19 @@ export function QuizEngine({
   const [{ questions, generationError }] = useState(() => {
     try {
       return {
-        questions: generateQuizQuestions({
-          selectedModes,
-          selectedCategories,
-          questionCount,
-          wineData,
-          difficulty
-        }),
+        questions: sessionKind === 'review'
+          ? generateReviewQuestions({
+              wineNames: targetWineNames,
+              wineData,
+              difficulty
+            })
+          : generateQuizQuestions({
+              selectedModes,
+              selectedCategories,
+              questionCount,
+              wineData,
+              difficulty
+            }),
         generationError: null
       };
     } catch (error) {
@@ -65,7 +76,10 @@ export function QuizEngine({
       details
     }]);
 
-    onAnswer(details.wineName || details.categoryId, isCorrect, details);
+    onAnswer({
+      ...getAnswerOutcome(questions[currentQuestion], answer, isCorrect, details),
+      answeredAt: new Date().toISOString()
+    });
   }, [currentQuestion, questions, onAnswer]);
 
   const handleNext = useCallback(() => {
@@ -76,22 +90,26 @@ export function QuizEngine({
       onComplete({
         score,
         total: questions.length,
-        answers
+        answers,
+        sessionKind,
+        sessionId
       });
     } else {
       setCurrentQuestion(prev => prev + 1);
     }
-  }, [currentQuestion, questions.length, score, answers, onComplete]);
+  }, [currentQuestion, questions.length, score, answers, onComplete, sessionId, sessionKind]);
 
   if (generationError || questions.length === 0) {
     return (
       <div className={`quiz-engine error-screen ${darkMode ? 'dark' : ''}`} role="alert">
-        <h2>Unable to start this quiz</h2>
+        <h2>Unable to start this {sessionKind === 'review' ? 'review' : 'quiz'}</h2>
         <p>{generationError || 'No questions are available for this configuration.'}</p>
         <div className="quiz-error-actions">
-          <button className="primary-btn" onClick={onReconfigure}>
-            Change Settings
-          </button>
+          {sessionKind !== 'review' && (
+            <button className="primary-btn" onClick={onReconfigure}>
+              Change Settings
+            </button>
+          )}
           <button className="secondary-btn" onClick={onExit}>
             Go Home
           </button>

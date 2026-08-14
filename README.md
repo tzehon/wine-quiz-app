@@ -21,9 +21,10 @@ An interactive React web application for learning wine categories and varietals 
 
 ### Progress Tracking
 - Spaced repetition (SM-2 algorithm) for optimal review scheduling
+- Exact style-category review sessions for wines that are currently due
 - Per-wine and per-category progress tracking
 - Daily streak tracking
-- Overall mastery percentage
+- Practice coverage and accuracy tracked from new answers
 - Progress export/import as JSON
 
 ### Study Mode

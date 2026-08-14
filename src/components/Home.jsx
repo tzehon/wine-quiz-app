@@ -1,33 +1,21 @@
 import { useMemo } from 'react';
-import {
-  calculateOverallMastery,
-  getMasteryLevel,
-  countWinesLearned,
-  getWinesDueForReview
-} from '../utils/calculateMastery';
+import { useCurrentTime } from '../hooks/useCurrentTime';
+import { getProgressSummary } from '../utils/progressMetrics';
 
 export function Home({
   progress,
   wineData,
+  isReadOnly = false,
   onStartQuiz,
+  onStartReview,
   onNavigate,
   darkMode
 }) {
-  const stats = useMemo(() => {
-    const winesLearned = countWinesLearned(progress.wineProgress);
-    const totalWines = wineData?.styles.reduce((acc, s) => acc + s.wines.length, 0) || 0;
-    const overallMastery = calculateOverallMastery(progress.wineProgress);
-    const winesDue = getWinesDueForReview(progress.wineProgress);
-
-    return {
-      winesLearned,
-      totalWines,
-      overallMastery,
-      masteryLevel: getMasteryLevel(overallMastery),
-      winesDueForReview: winesDue.length,
-      currentStreak: progress.streakData.currentStreak
-    };
-  }, [progress, wineData]);
+  const now = useCurrentTime();
+  const stats = useMemo(
+    () => getProgressSummary(progress, wineData, now),
+    [now, progress, wineData]
+  );
 
   return (
     <div className={`home ${darkMode ? 'dark' : ''}`}>
@@ -39,26 +27,28 @@ export function Home({
 
       <div className="quick-stats">
         <div className="stat-item">
-          <span className="stat-value">{stats.overallMastery}%</span>
-          <span className="stat-label">Mastery</span>
+          <span className="stat-value">
+            {stats.accuracyPercent === null ? '—' : `${stats.accuracyPercent}%`}
+          </span>
+          <span className="stat-label">Tracked Accuracy</span>
         </div>
         <div className="stat-item">
-          <span className="stat-value">{stats.winesLearned}</span>
-          <span className="stat-label">Wines Learned</span>
+          <span className="stat-value">{stats.practicedCount}/{stats.catalogTotal}</span>
+          <span className="stat-label">Wines Practiced</span>
         </div>
         <div className="stat-item streak">
-          <span className="stat-value">{stats.currentStreak}</span>
+          <span className="stat-value">{stats.streak.current}</span>
           <span className="stat-label">Day Streak</span>
         </div>
       </div>
 
       <div className="action-buttons">
-        <button className="primary-btn" onClick={onStartQuiz}>
+        <button className="primary-btn" onClick={onStartQuiz} disabled={isReadOnly}>
           <span className="btn-icon">🎯</span>
           <span className="btn-text">Start Quiz</span>
         </button>
 
-        <button className="secondary-btn" onClick={() => onNavigate('study')}>
+        <button className="secondary-btn" onClick={() => onNavigate('study')} disabled={isReadOnly}>
           <span className="btn-icon">📚</span>
           <span className="btn-text">Study Mode</span>
         </button>
@@ -69,11 +59,11 @@ export function Home({
         </button>
       </div>
 
-      {stats.winesDueForReview > 0 && (
-        <div className="review-reminder">
+      {stats.dueCount > 0 && (
+        <button className="review-reminder" onClick={onStartReview} disabled={isReadOnly}>
           <span className="reminder-icon">📝</span>
-          <span>{stats.winesDueForReview} wines due for review</span>
-        </div>
+          <span>Review {stats.dueCount} wine style{stats.dueCount === 1 ? '' : 's'}</span>
+        </button>
       )}
 
       <div className="tip-of-day">
